@@ -1,44 +1,57 @@
 node {
-    def mvnHome
+   def mvnHome
    stage('Preparation') { // for display purposes
       // Get some code from a GitHub repository
-      git 'https://github.com/nidzelska/CI-CD-demo'
+      git 'https://github.com/108lirik/CI-CD-demo.git'
       // Get the Maven tool.
-      mvnHome = tool 'mvn'
+      // ** NOTE: This 'M3' Maven tool must be configured
+      // **       in the global configuration.           
+      mvnHome = tool 'my_maven'
    }
    stage('Build') {
       // Run the maven build
       if (isUnix()) {
-         sh "'${mvnHome}/bin/mvn' -Dmaven.test.failure.ignore clean package"
+         sh "'${mvnHome}/bin/mvn' -Dmaven.test.failure.ignore clean package -Dv=${BUILD_NUMBER}"
       } else {
          bat(/"${mvnHome}\bin\mvn" -Dmaven.test.failure.ignore clean package/)
       }
+      
+      sh "mv -f /var/lib/jenkins/workspace/jar_pipe/target/*.jar ./app.jar"
+      
    }
-stage('Upload to artifactory') {
-def server = Artifactory.server 'art'
-def uploadSpec = """{
-  "files": [
-    {
+   stage('Artifu') {
+       def server = Artifactory.server 'my_artifactory'
+       def uploadSpec = """{
+       "files": [
+       {
       "pattern": "target/*.jar",
-      "target": "laba/${BUILD_ID}/"
-    }
- ]
-}"""
-server.upload(uploadSpec)
-}
+      "target": "libs-release-local"
+       }
+       ]
+       }"""
 
-stage('Upload to regestry') {
-       docker.withRegistry('http://localhost:5000') {
-              def testImage = docker.build("jar-image:${env.BUILD_ID}")
-              /* Push the container to the custom Registry */
+   server.upload(uploadSpec)
+   }
+   stage('Build2') {
+      // Run docker build
+
+      docker.withRegistry('http://localhost:5000') {
+              def testImage = docker.build("app:${env.BUILD_ID}")
+
               testImage.push()
           }
     }
-   
-   
-   // stage('Results') {
-   //   junit '**/target/surefire-reports/TEST-*.xml'
-    //  archive 'target/*.jar'
-   // }
-   
+    
+    stage('Ansibla'){
+        sh "ansible env -i /vagrant/ansible/hosts -u vagrant -m ping"
+    }
+       
 }
+      
+//   stage('Results') {
+ //     junit '**/target/surefire-reports/TEST-*.xml'
+ //     archive 'target/*.jar'
+   
+//
+//   }
+//}
